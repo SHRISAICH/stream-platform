@@ -1,0 +1,4 @@
+name: stream-api
+
+include:
+  - path: stream-api/docker-compose.yml
