@@ -3,6 +3,7 @@ services:
     image: postgres:16
     container_name: stream-postgres
     restart: unless-stopped
+    profiles: ["local"]
     environment:
       POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-stream_user}
       POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-stream_password}
@@ -63,23 +64,19 @@ services:
     restart: unless-stopped
     environment:
       SERVER_PORT: 8081
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/stream_db
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-stream_user}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-stream_password}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?Set SPRING_DATASOURCE_URL to the Amazon RDS PostgreSQL JDBC URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?Set SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Set SPRING_DATASOURCE_PASSWORD}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SRS_API_URL: http://srs:1985
       SRS_PLAYBACK_URL_PREFIX: ${SRS_PLAYBACK_URL_PREFIX:-/live}
       MINIO_URL: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin12345}
-      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-stratalive-videos}
-      JWT_SECRET: ${JWT_SECRET:-mySuperSecretKeyForJwtAuthentication123456789}
-    ports:
-      - "8081:8081"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:?Set MINIO_BUCKET_NAME}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -100,8 +97,6 @@ services:
     command: ./objs/srs -c conf/srs.conf
     ports:
       - "1935:1935"
-      - "1985:1985"
-      - "8080:8080"
     volumes:
       - ./infrastructure/srs/srs.conf:/usr/local/srs/conf/srs.conf:ro
       - ./infrastructure/srs/srs.conf:/usr/local/srs/conf/docker.conf:ro

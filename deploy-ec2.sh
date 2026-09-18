@@ -48,6 +48,47 @@ if [ ! -f "stream-api/.env" ]; then
     fi
 fi
 
+# Validate the production configuration without evaluating values from .env as shell code.
+get_env_value() {
+    local variable_name="$1"
+    awk -v name="$variable_name" '
+        index($0, name "=") == 1 {
+            print substr($0, length(name) + 2)
+            exit
+        }
+    ' stream-api/.env
+}
+
+REQUIRED_ENV_VARS=(
+    SPRING_DATASOURCE_URL
+    SPRING_DATASOURCE_USERNAME
+    SPRING_DATASOURCE_PASSWORD
+    MINIO_ROOT_USER
+    MINIO_ROOT_PASSWORD
+    MINIO_BUCKET_NAME
+    JWT_SECRET
+    SRS_PLAYBACK_URL_PREFIX
+)
+
+for ENV_VAR_NAME in "${REQUIRED_ENV_VARS[@]}"; do
+    ENV_VAR_VALUE="$(get_env_value "$ENV_VAR_NAME")"
+    if [[ -z "$ENV_VAR_VALUE" || "$ENV_VAR_VALUE" == replace_with_* ]]; then
+        echo "ERROR: $ENV_VAR_NAME is missing or still uses an example placeholder in stream-api/.env."
+        exit 1
+    fi
+done
+
+RDS_JDBC_URL="$(get_env_value "SPRING_DATASOURCE_URL")"
+if [[ "$RDS_JDBC_URL" != jdbc:postgresql://*.rds.amazonaws.com:*/* ]]; then
+    echo "ERROR: SPRING_DATASOURCE_URL must be an Amazon RDS PostgreSQL JDBC URL for this deployment."
+    exit 1
+fi
+
+if [[ "$(get_env_value "SRS_PLAYBACK_URL_PREFIX")" != "/live" ]]; then
+    echo "ERROR: SRS_PLAYBACK_URL_PREFIX must be /live so Nginx can proxy HLS playback."
+    exit 1
+fi
+
 # Step 3: Build Frontend Production Bundle (if Node is present on host)
 echo "=== [3/5] Checking Frontend Assets ==="
 if [ -d "stream-web" ] && command -v npm &> /dev/null; then
@@ -63,32 +104,22 @@ else
     echo "Pre-built frontend assets in stream-api/infrastructure/nginx/html will be used."
 fi
 
-# Step 4: Verify or Build Backend JAR
-echo "=== [4/6] Checking Backend JAR Artifact ==="
-if ! ls stream-api/target/stream-api-*.jar 1> /dev/null 2>&1; then
-    echo "Pre-built backend JAR not found in target/. Building with Maven wrapper..."
-    cd stream-api
-    ./mvnw clean package -DskipTests
-    cd ..
-    echo "Backend JAR built successfully."
-else
-    echo "Pre-built backend JAR found in stream-api/target/."
-fi
-
-# Step 5: Launch Complete Container Stack via Docker Compose
-echo "=== [5/6] Building & Starting Full Docker Compose Stack ==="
+# Step 4: Launch Complete Container Stack via Docker Compose
+# The multi-stage Dockerfile builds the backend from source inside the image build.
+echo "=== [4/5] Validating and Starting Full Docker Compose Stack ==="
 cd stream-api
+docker compose config > /dev/null
 docker compose up -d --build
 
-# Step 6: Health Check & Verification
-echo "=== [6/6] Waiting for Platform Services to Initialize ==="
+# Step 5: Health Check & Verification
+echo "=== [5/5] Waiting for Platform Services to Initialize ==="
 MAX_RETRIES=30
 RETRY_COUNT=0
 HEALTH_OK=false
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     RETRY_COUNT=$((RETRY_COUNT+1))
-    if curl -s http://localhost:8081/actuator/health | grep -q '"status":"UP"'; then
+    if curl -s http://localhost/actuator/health | grep -q '"status":"UP"'; then
         HEALTH_OK=true
         break
     fi
@@ -104,7 +135,7 @@ if [ "$HEALTH_OK" = true ]; then
     echo ""
     echo "Public Endpoints:"
     echo "  • Web Application / SPA:   http://<EC2-HOST>/"
-    echo "  • Backend API & Actuator:  http://<EC2-HOST>:8081/actuator/health"
+    echo "  • Backend API & Actuator:  http://<EC2-HOST>/actuator/health"
     echo "  • SRS RTMP Publishing:     rtmp://<EC2-HOST>:1935/live/<STREAM_KEY>"
     echo "  • HLS Live Stream:         http://<EC2-HOST>/live/<STREAM_KEY>.m3u8"
     echo "  • MinIO Console:           http://<EC2-HOST>:9001"

@@ -1,10 +1,10 @@
+import { Client } from '@stomp/stompjs'
 import Hls from 'hls.js'
 import { useEffect, useRef, useState } from 'react'
-import { Client } from '@stomp/stompjs'
 import './App.css'
-import ScheduleStreamModal from './components/ScheduleStreamModal'
-import AnalyticsView from './components/AnalyticsView'
 import AdminDashboardView from './components/AdminDashboardView'
+import AnalyticsView from './components/AnalyticsView'
+import ScheduleStreamModal from './components/ScheduleStreamModal'
 
 const getHost = () => {
   if (typeof window !== 'undefined' && window.location.hostname) {
@@ -15,17 +15,12 @@ const getHost = () => {
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.port === '3000')
+  (typeof window !== 'undefined' &&
+  (window.location.port === '5173' || window.location.port === '3000')
     ? `http://${getHost()}:8081`
-    : (typeof window !== 'undefined' && window.location.port === '80'
-      ? ''
-      : `http://${getHost()}:8081`))
+    : '')
 
-const SRS_HTTP_URL =
-  import.meta.env.VITE_SRS_HTTP_URL ||
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${getHost()}:8080`
-    : 'http://localhost:8080')
+const SRS_HTTP_URL = import.meta.env.VITE_SRS_HTTP_URL || ''
 
 const RTMP_SERVER_BASE =
   import.meta.env.VITE_RTMP_URL || `rtmp://${getHost()}:1935/live`
@@ -663,9 +658,7 @@ function App() {
   const playbackSourceUrl = rawPlaybackUrl
     ? (rawPlaybackUrl.startsWith('/')
         ? rawPlaybackUrl
-        : (getHost() !== 'localhost' && (rawPlaybackUrl.includes('localhost:8080') || rawPlaybackUrl.includes('127.0.0.1:8080'))
-            ? rawPlaybackUrl.replace(/^http:\/\/(localhost|127\.0\.0\.1):8080/, '')
-            : rawPlaybackUrl))
+        : rawPlaybackUrl)
     : ''
 
   useEffect(() => {
